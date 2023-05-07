@@ -1,3 +1,107 @@
+-- IF expression THEN
+--                 instructions
+-- ELSE
+--                 instructions
+-- END IF
+-- EXEMPLE 1 
+DELIMITER $$
+CREATE OR REPLACE PROCEDURE IF NOT EXISTS `soidePrix`(IN des varchar(20), OUT psolde int)
+OPTIONS (strict_mode = TRUE)
+BEGIN
+    DECLARE p int ;
+    SET p = (SELECT
+        prix
+    FROM `article`
+    WHERE
+        designation = des);
+    IF(p > 2000) THEN 
+        SET psolde = p - p * 0.1;
+    ELSE
+        SET psolde = p;
+    END IF;
+END$$
+DELIMITER ;
+-- lllllllllllllllllllllllllllllllllllllllllllllllllll
+-- Autre Structure Alternative : case .........When
+-- CASE expression
+-- WHEN valeurs THEN 
+--              instructions
+-- [WHEN valeurs THEN
+--                instructions]
+-- [ELSE
+--                instructions]
+-- Exemple1:
+SELECT
+    refart, designation, qtiteStock,
+    CASE 
+        WHEN qtiteStock < 10 THEN "Rupture stock"
+        WHEN qtiteStock = 10 THEN "quantité en stock faible"
+        ELSE "quantité suffisante"
+    END as "observation"
+FROM article;
+-- Exemple2:
+DELIMITER $$
+CREATE PROCEDURE v_note(IN note int, OUT mention varchar(20))
+BEGIN
+    CASE
+        WHEN note >= 16 THEN
+            SET mention = 'Félicitation';
+        WHEN note >= 14 THEN
+            SET mention = 'Encouragement';
+        WHEN note >= 12 THEN
+            SET mention = 'Assez bien';
+        WHEN note >= 10 THEN
+            SET mention = 'Passable';
+        ELSE
+            SET mention = 'Insuffisant';
+    END CASE;
+END$$
+DELIMITER ;
+-- lllllllllllllllllllllllllllllllllllllllllllllllllll
+-- Structure Répétitive :
+-- Syntaxe :
+--      WHILE expression DO 
+--          instructions
+--      END WHILE condition;
+-- Exemple1
+-- Ecrire une Ps qui calcule le factoriel d'un nombre donné: /* Ecrire une ps qui calcule le factoriel d'un nombre */ drop procedure if exists facte-iel
+DELIMITER $$
+CREATE PROCEDURE factoriel(IN n int, OUT fac int)
+BEGIN
+    DECLARE i int;
+    SET i = 1;
+    SET fac = 1;
+    WHILE i <= n DO
+        SET fac = fac * i;
+        SET i = i + 1;
+    END WHILE;
+END$$
+DELIMITER ;
+-- lllllllllllllllllllllllllllllllllllllllllllllllllll
+-- [labele_debut:]LOOP
+--     statement_list
+-- END LOOP[label_fin]
+-- Exemple1
+--  Ecrire une PS qui remplit une table par des nombres et leurs carrés inférieur ou égale à 10 et create table test( a int, b int)
+DELIMITER $$
+CREATE PROCEDURE test()
+BEGIN
+    DECLARE i int DEFAULT 1;
+    Maboucle: LOOP
+        INSERT INTO test VALUES (i, i * i);
+        SET i = i + 1;
+        IF(i > 10) THEN
+            LEAVE Maboucle;
+        END IF;
+    END LOOP Maboucle;
+END$$
+DELIMITER ;
+
+
+
+
+    
+------------------------------------------------------------------------------------------------------------------    
 -- L'aéroport international de Casablanca est un des aéroports les plus importants actuellement. Il souhaite informatiser la gestion des vols. L'étude de l'existant a permis d'élaborer le schéma relationnel suivant :
 -- Pilote(N°pilote ,nom-pilote, Prénom-pilote,DateNaissance localisation)
 -- Vol (N°vol,N°pilote,N°avion,datdépart,datarrivée,villedépart, villearrivée,durée,tarif) 
@@ -160,3 +264,6 @@ BEGIN
     END IF;
 END //
 DELIMITER;
+
+
+-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
