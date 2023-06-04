@@ -266,4 +266,684 @@ END //
 DELIMITER;
 
 
--- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------    
+
+-- Soit le schéma relationnel de la base << AcciRoute >> : 
+-- Personne (NAS, nom, VilleP)
+-- Voiture (Imma, modele, annee,NAS*)
+-- Accident (DateAc, NAS*, dommage, villeAc, imma* )
+-- Questions:
+-- 1. Créer la base de données AcciRoute.
+-- 2. Créer la procédure CreateAcciRoute qui permet de construire les tables de données AcciRoute en les supprimant s'ils existent avant leur création.
+-- 3. Créer la procédure InsertAcciRoute qui permet d'insérer les données dans AcciRoute en vérifiant l'intégrité référentielle.
+-- 4. Créer la procédure GetnumProp qui permet de calculer le nombre de propriétaires impliqués dans un accident entre deux années données.
+-- 5. Créer la procédure GetProp qui donne le nom et le nas des propriétaires qui ont fait deux accidents dans un intervalle de 4 mois.
+-- 6. Créer la procédure GetDamCity qui calcule le total des dommages d'une ville donnée et affiche << catégorie1 » pour dommage<=5000 et «< catégorie2 » pour dommage entre 5000 et 10000 et << catégorie3 » pour dommage >10000.
+-- 7. Créer la procédure GetnumAcci qui permet d'afficher pour chaque ville le nombre total d'accidents enregistrés.
+-- 8. Créer la procédure GetNamProp qui permet d'afficher le nom des propriétaires qui résident dans une ville où il y a eu plus de x accidents tel que x un paramètre de la procédure.
+-- 9. Créer la procédure GetnumAcciDat qui calcule le nombre d'accidents qui sont survenus à une date donnée.
+-- 10.Créer la procédure GetnumAcciHour qui calcule le nombre d'accidents survenus entre deux heures données.
+-- 11.Créer la procédure UpdateDam qui permet de diminuer de 5% le dommage à chaque véhicule dont les dommages dépassant les 5000.00.
+------------------------------------------------------------------------------------------------
+-- 1.Créer la base de données AcciRoute.
+create database AcciRoute
+-- 2. Créer la procédure CreateAcciRoute qui permet de construire les tables de données AcciRoute en les supprimant s'ils existent avant leur création.
+DELIMITER $$
+CREATE PROCEDURE CreateAcciRoute()
+BEGIN
+    DROP TABLE [IF EXISTS] Personne
+    DROP TABLE [IF EXISTS] voiture
+    DROP TABLE [IF EXISTS] Accident
+
+    create table Personne (
+        nas varchar(60) PRIMARY KEY,
+        nom varchar(60) ,
+        VilleP varchar(60) ,
+    );
+        create table Voiture (
+        Imma varchar(60) PRIMARY KEY,
+        modele varchar(60) ,
+        annee int ,
+        nas varchar(60) Foreign key (nas) references Personne (nas) on delete cascade,
+    );
+    create table Accident (
+        DateAc date,
+        NAS varchar(60) ,
+        dommage varchar(60) ,
+        villeAc varchar(60) ,
+        imma varchar(60) ,
+        Foreign key (nas) references Personne (nas) on delete cascade,
+        Foreign key (imma) references Voiture (imma) on delete cascade, 
+
+    );
+END$$
+DELIMITER ;
+-- 3. Créer la procédure InsertAcciRoute qui permet d'insérer les données dans AcciRoute en vérifiant l'intégrité référentielle.
+DELIMITER $$
+CREATE PROCEDURE InsertAcciRoute ()
+BEGIN
+INSERT INTO Personne (NAS, nom, VilleP) VALUES
+        ('1234567890', 'John Doe', 'VilleA'),
+        ('9876543210', 'Jane Smith', 'VilleB');
+
+    -- Insérer les données dans la table Voiture
+    INSERT INTO Voiture (Imma, modele, annee, NAS) VALUES
+        ('ABC123', 'ModèleA', 2020, '1234567890'),
+        ('XYZ987', 'ModèleB', 2018, '9876543210');
+
+    -- Insérer les données dans la table Accident
+    INSERT INTO Accident (DateAc, NAS, dommage, villeAc, imma) VALUES
+        ('2023-01-01', '1234567890', 2000.00, 'VilleA', 'ABC123'),
+        ('2023-02-01', '9876543210', 3000.00, 'VilleB', 'XYZ987');
+END$$
+DELIMITER;
+-- 4. Créer la procédure GetnumProp qui permet de calculer le nombre de propriétaires impliqués dans un accident entre deux années données.
+DELIMITER $$
+CREATE PROCEDURE GetnumProp(in startyear int, in endyear int,out numProp int) 
+BEGIN
+    SELECT
+        COUNT(DISTINCT nas) into numProp
+    FROM accident
+    WHERE
+        YEAR(DateAc) BETWEEN startyear AND endyear
+END$$
+DELIMITER;
+-- 5. Créer la procédure GetProp qui donne le nom et le nas des propriétaires qui ont fait deux accidents dans un intervalle de 4 mois.
+DELIMITER $$
+CREATE PROCEDURE GetProp (in startdate date,in enddate date)
+BEGIN
+    SELECT
+        p.nom ,p.nas
+    FROM Personne p
+    WHERE
+        p.nas in (
+            SELECT
+                a.nas
+            FROM Accident a
+            WHERE
+                a.DateAc BETWEEN startdate AND enddate
+                GROUP BY
+                    a.nas 
+                    HAVING
+                        COUNT(*)>=2
+        )
+END $$
+DELIMITER;
+-- 6. Créer la procédure GetDamCity qui calcule le total des dommages d'une ville donnée  et affiche << catégorie1 » pour dommage<=5000 et «< catégorie2 » pour dommage entre 5000 et 10000 et << catégorie3 » pour dommage >10000.
+DELIMITER $$
+CREATE PROCEDURE  GetDamCity(in city varchar(50))
+BEGIN
+DECLARE totalDommage int;
+SELECT
+     sum(dommage) as totalDommage
+FROM Accident
+WHERE villeAc = city
+    condition
+        IF totalDommage <= 5000 THEN
+            SELECT 'catégorie1' AS categorie;
+        ELSEIF totalDommage <= 10000 THEN
+            SELECT 'catégorie2' AS categorie;
+        ELSE
+            SELECT 'catégorie3' AS categorie;
+        END IF;        
+END$$
+DELIMITER;
+
+-- 7. Créer la procédure GetnumAcci qui permet d'afficher pour chaque ville le nombre total d'accidents enregistrés.
+DELIMITER $$
+CREATE PROCEDURE GetnumAcci()
+BEGIN
+    SELECT villeAc,
+        COUNT(*) as numAccidents
+FROM Accident
+GROUP BY
+    villeAc
+END$$
+DELIMITER;
+-- 8. Créer la procédure GetNamProp qui permet d'afficher le nom des propriétaires qui résident dans une ville où il y a eu plus de x accidents tel que x un paramètre de la procédure.
+DELIMITER $$
+CREATE PROCEDURE GetNamProp(IN numAccidents INT)
+BEGIN
+SELECT p.nom
+    FROM Personne p
+    WHERE p.VilleP IN (
+        SELECT villeAc
+        FROM Accident
+        GROUP BY villeAc
+        HAVING COUNT(*) > numAccidents
+    );
+END$$
+DELIMITER;
+-- 9. Créer la procédure GetnumAcciDat qui calcule le nombre d'accidents qui sont survenus à une date donnée.
+DELIMITER $$
+CREATE PROCEDURE GetnumAcciDat(IN accidentDate DATE, OUT numAccidents INT)
+BEGIN
+SELECT
+    count(*) into numAccidents
+FROM Accident
+WHERE
+    DateAc = accidentDate;
+END$$
+DELIMITER;
+-- 10.Créer la procédure GetnumAcciHour qui calcule le nombre d'accidents survenus entre deux heures données.
+DELIMITER $$
+CREATE PROCEDURE GetnumAcciHour(in startheur date, in endheur date, OUT numAccidents INT)
+BEGIN
+SELECT
+    count(*) INTO numAccidents
+FROM accident
+WHERE
+    TIME(DateAc) BETWEEN startheur AND endheur
+END$$
+DELIMITER;
+-- 11.Créer la procédure UpdateDam qui permet de diminuer de 5% le dommage à chaque véhicule dont les dommages dépassant les 5000.00.
+DELIMITER //
+CREATE PROCEDURE UpdateDam()
+BEGIN
+    UPDATE Accident
+    SET dommage = dommage * 0.95
+    WHERE dommage > 5000.00;
+END //
+DELIMITER ;
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------    
+-- Partie 1: Questions sur les procédures stockées
+-- 1) Afficher les différents pays qui ont participé à la coupe mondiale.
+-- 2) Afficher la liste des arbitres
+-- 3) Afficher les noms des stades qui ont pu accueillir plus de N spectateurs
+-- 4) Afficher pour chaque match le nombre de places vacantes dans le stade.
+-- 5) Afficher tous les noms des joueurs marocains qui ont participé à la coupe mondiale. 6) Afficher les noms ordonnés des arbitres des matchs joués par une équipe donnée. 7) Afficher les noms des joueurs qui ont marqué au moins N buts d'un type donné.
+-- 8) Afficher pour une équipe donnée le nombre de buts marqués.
+-- 9) Afficher le nom du joueur marocain qui a marqué le maximum de buts.
+-- 10) Ajouter à tout joueur marocain deux buts.
+-- Partie 2: Questions sur les fonctions stockées
+-- 1) Ecrire une fonction qui prend en paramètre un numéro stade et qui renvoie une chaine de caractère contenant le nom du stade et le nombre de match joués sur ce stade.
+-- 2) Ecrire une fonction qui prend en entrée le nom d'un arbitre et produit une chaine contenant les matchs qu'il a arbitré.
+-- Partie 3: Questions sur les triggers
+-- 1) Lors de l'ajout d'un individu, on met son nom en majuscule ainsi que la première lettre de son prénom.
+-- 2) Lors de l'ajout d'un match on vérifie si le nombre de spectateurs est inferieur ou égale au nombre de places disponibles dans le stade. si oui on l'ajoute sinon on affiche un message d'erreur.
+-- 3) Lors de l'insertion d'un but on vérifie si la minute est positive.
+-- 4) Lors de la suppression d'un joueur, on supprime aussi les buts qu'il a marqués.
+-- 5) Interdire de modifier la date d'un match.
+-- 6) Lors de la suppression d'une équipe, on supprime les joueurs.
+-- 7) Lors de la suppression d'une équipe on supprime les joueurs et les buts.
+-- 8) Lors de l'ajout d'une équipe si on essaie d'insérer dans le champ nationalité
+--         'fr' alors on la modifie en : France
+--         'Mr' alors on la modifie en: Maroc 
+--         'Br' alors on la modifie en : Brésil 
+--         'Esp' alors on la modifie en Espagne
+------------------------------------------------------------------------------------------------------------------------------
+-- Partie 1: Questions sur les procédures stockées
+-- 1) Afficher les différents pays qui ont participé à la coupe mondiale.
+DELIMITER $$
+CREATE PROCEDURE AfficherPaysParticipants( )
+BEGIN
+    SELECT DISTINCT nationalité
+    FROM Equipe
+END$$
+DELIMITER;
+-- 2) Afficher la liste des arbitres
+DELIMITER $$
+CREATE PROCEDURE AfficherArbitres( )
+BEGIN
+    SELECT
+        Nom,Prenom
+    FROM individu
+    WHERE
+        arbitre=1;
+END$$
+DELIMITER;
+-- 3) Afficher les noms des stades qui ont pu accueillir plus de N spectateurs
+DELIMITER $$
+CREATE PROCEDURE AfficherStadesCapaciteSup(in n int )
+BEGIN
+    SELECT
+        Nom_de_stades,
+    FROM stade
+    WHERE
+    Nb_de_places  > n;
+END$$
+DELIMITER;
+-- 4) Afficher pour chaque match le nombre de places vacantes dans le stade.
+DELIMITER $$
+CREATE PROCEDURE AfficherPlacesVacantes( )
+BEGIN
+    SELECT
+        MATCH.Id_de_match, STADE.Nb_de_places -MATCH.Nb_de_spectateurs AS Places_vacantes
+    FROM MATCH
+        JOIN STADE ON MATCH.jouer_dans = STADE.Code_de_Stade;
+END$$
+DELIMITER;
+-- 5) Afficher tous les noms des joueurs marocains qui ont participé à la coupe mondiale. 
+DELIMITER $$
+CREATE PROCEDURE AfficherJoueursMarocains( )
+BEGIN
+    SELECT
+        nom, Prenom
+    FROM INDIVIDU 
+    WHERE
+        nationalité='marocain' AND Jouer = 1;
+END$$
+DELIMITER;
+-- 6) Afficher les noms ordonnés des arbitres des matchs joués par une équipe donnée. 
+DELIMITER $$
+CREATE PROCEDURE AfficherArbitresEquipaDonnee(in codeEquipe varchar(10))
+BEGIN
+SELECT
+    individu.nom,individu.Prenom
+FROM individu
+JOIN match on individu.No_individu = match.arbitrer
+WHERE
+    Match.jouer_dans=codeEquipe
+    ORDER BY
+        INDIVIDU.nom,INDIVIDU.Prenom
+END$$
+DELIMITER;
+-- 7) Afficher les noms des joueurs qui ont marqué au moins N buts d'un type donné.
+DELIMITER $$
+CREATE PROCEDURE AfficherJoueurbutstypeDonne(in N int,typeBut varchar(39) )
+BEGIN
+    SELECT
+        individu.nom, individu.Prenom
+    FROM individu
+    JOIN but on individu.No_individu=but.marquer
+    WHERE
+        but.type_de_But=typeBut
+        GROUP BY
+            individu.No_individu,INDIVIDU.nom ,INDIVIDU.Prenom
+        HAVING count(*)>=N
+END$$
+DELIMITER;
+-- 8) Afficher pour une équipe donnée le nombre de buts marqués.
+DELIMITER $$
+CREATE PROCEDURE AfficherButsEquipeDonnee(codeEquipe varchar(20))
+BEGIN
+    SELECT
+    count(*)  as buts_marqués
+    FROM but
+    JOIN Match on but.but =MATCH.Id_de_match
+    WHERE
+        Match.jouer_dans=codeEquiped;
+END$$
+DELIMITER;
+-- 9) Afficher le nom du joueur marocain qui a marqué le maximum de buts.
+DELIMITER $$
+CREATE PROCEDURE AfficherJoueursMarocainsplusbuts( )
+BEGIN
+SELECT
+    Nom,Prenom
+FROM INDIVIDU
+JOIN But on INDIVIDU.No_individu = BUT.Marquer
+WHERE
+    nationalité="maroc"
+    ORDER BY
+        count(*) DESC limit 1 ;
+END$$
+DELIMITER;
+--10) Ajouter à tout joueur marocain deux buts :
+DELIMITER $$
+CREATE PROCEDURE ajoutbutsjoueursmarocains( )
+BEGIN
+UPDATE but
+JOIN individu on but.marque=individu.No_individu
+SET but.but=but.but+2
+WHERE INDIVIDU.Nationalité = 'Maroc';
+END$$
+DELIMITER;
+-- Partie 2: Questions sur les fonctions stockées   (MA3RAFTCH LIHOOOOOM)
+-- 1) Ecrire une fonction qui prend en paramètre un numéro stade et qui renvoie une chaine de caractère contenant le nom du stade et le nombre de match joués sur ce stade.
+DELIMITER $$
+CREATE FUNCTION  GetStadiumInfo(stadiumId  int)
+RETURNS varchar(20)
+BEGIN
+    DECLARE stadiumName VARCHAR(255);
+    DECLARE matchCount INT;
+
+    SELECT nom_stade, COUNT(*) INTO stadiumName, matchCount
+    FROM CoupeDuMonde.STADE
+    JOIN CoupeDuMonde.MATCH ON CoupeDuMonde.STADE.code_stade = CoupeDuMonde.MATCH.jouer_dans
+    WHERE CoupeDuMonde.STADE.code_stade = stadiumId
+    GROUP BY CoupeDuMonde.STADE.code_stade;
+
+    RETURN CONCAT('Le stade ', stadiumName, ' a accueilli ', matchCount, ' match(s).');
+
+END$$
+DELIMITER;
+-- 2) Ecrire une fonction qui prend en entrée le nom d'un arbitre et produit une chaine contenant les matchs qu'il a arbitré.
+DELIMITER $$
+CREATE FUNCTION  GetMatchesByReferee(refereeName VARCHAR(255))
+RETURNS varchar(20)
+BEGIN
+ DECLARE stadiumName VARCHAR(255);
+    DECLARE matches VARCHAR(500);
+
+    SELECT GROUP_CONCAT(CONCAT('Match ID: ', CoupeDuMonde.MATCH.id_match, ', Date: ', CoupeDuMonde.MATCH.date_heure_match)) INTO matches
+    FROM CoupeDuMonde.INDIVIDU
+    JOIN CoupeDuMonde.ARBITRER ON CoupeDuMonde.INDIVIDU.no_individu = CoupeDuMonde.ARBITRER.arbitrer
+    JOIN CoupeDuMonde.MATCH ON CoupeDuMonde.ARBITRER.arbitrer = CoupeDuMonde.MATCH.id_match
+    WHERE CoupeDuMonde.INDIVIDU.nom_prenom = refereeName;
+
+    RETURN CONCAT('Les matchs arbitrés par ', refereeName, ' sont : ', matches);
+
+END$$
+DELIMITER;
+-- Partie 3: Questions sur les triggers
+-- 1) Lors de l'ajout d'un individu, on met son nom en majuscule ainsi que la première lettre de son prénom.
+create trigger capatilizename
+BEFORE INSERT on individu
+for EACH ROW
+BEGIN
+set new.nom=UPPER(new.nom);
+set new.Prenom=CONCAT(UPPER(new.Prenom,1),SUBSTRING(new.Prenom,2))
+END;
+-- 2) Lors de l'ajout d'un match on vérifie si le nombre de spectateurs 
+-- est inferieur ou égale au nombre de places disponibles dans le stade.
+--  si oui on l'ajoute sinon on affiche un message d'erreur.
+create trigger checkAttendance 
+BEFORE insert on match
+for EACH ROW
+BEGIN
+DECLARE stadiumCapacity  int;
+SELECT
+    Nb_de_places into stadiumCapacity 
+FROM stade
+WHERE
+    Code_de_Stade=new.jouer_dans
+    if new.Nb_de_spectateurs > stadiumCapacity THEN
+    signal SQLSTATE'4500' set MESSAGE_TEXT = 'Le nombre de spectateurs dépasse la capacité du stade.';
+END if;
+END;
+-- 3) Lors de l'insertion d'un but on vérifie si la minute est positive.
+create trigger CheckGoalMinute
+BEFORE INSERT on but 
+for EACH ROW
+BEGIN
+    if new.minute_but<=0 THEN
+    signal SQLSTATE'4500' set MESSAGE_TEXT='La minute du but doit être positive.';
+END if;
+END;
+-- 4) Lors de la suppression d'un joueur, on supprime
+--  aussi les buts qu'il a marqués.
+create trigger deleteplayergoals()
+after delete on individu
+for EACH ROW
+BEGIN
+    delete from but where marque=old.no_individu
+END;
+-- 5) Interdire de modifier la date d'un match.
+create trigger notdatechange
+BEFORE UPDATE on match
+for EACH ROW
+BEGIN
+    if old.date_heure_match != new.date_heure_match THEN
+    SIGNAL SQLSTATE '4500' set MESSAGE_TEXT="La modification de la date d'un match est interdite.";
+END IF;
+END;
+-- 6) Lors de la suppression d'une équipe, on supprime les joueurs.
+create trigger deletetheamePlayers
+after delete on Equipe
+for EACH ROW
+BEGIN
+    delete from individu where jouer_dans=old.code_equipe;
+END;
+-- 7) Lors de la suppression d'une équipe on supprime les joueurs et les buts.
+create trigger deletetheamePlayersBut
+after delete on Equipe
+for EACH ROW
+BEGIN
+    delete from individu where jouer_dans=old.code_equipe;
+    delete from but where marque in(select no_individu from individu where jouer_dans=old.code_equipe)
+END;
+-- 8) Lors de l'ajout d'une équipe si on essaie d'insérer dans le champ nationalité
+--         'fr' alors on la modifie en : France
+--         'Mr' alors on la modifie en: Maroc 
+--         'Br' alors on la modifie en : Brésil 
+--         'Esp' alors on la modifie en Espagne
+create trigger modifieNationality 
+BEFORE insert on Equipe
+for EACH row 
+BEGIN
+    if new.nationalité='fr' THEN
+    set new.nationalité='france';
+    elseif new.nationalité='mr' THEN
+    set new.nationalité='maroc';
+    elseif new.nationalité='br' THEN
+    set new.nationalité='bresil';
+    elseif new.nationalité='Esp' THEN
+    set new.nationalité='espagne';
+    endIf;
+END;
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------    
+-- Soit la base de données suivante permettant de gérer un championnat de football.
+-- ▪ Stade (idStade, ville, nom, nbPlaces, prixBillet)
+-- ▪ Equipe (idEquipe, pays, siteWeb, entraîneur)
+-- ▪ Joueur (idJoueur, idEquipe,position, nom, prénom, âge,nombrebut)
+-- ▪ Match(idMatch, idStade,dateMatch, idEquipe1, idEquipe2,scoreEquipe1, scoreEquipe2, nbBilletsVendus)
+-- ▪ But (idJoueur, idMatch, minute, penalty)
+-- 1- Créer la base de données « BotolaPro2022 » 
+-- 2- Créer les Tables avec un jeu d’enregistrement tenant compte des contraintes suivantes : 
+--             - L’âge de joueur doit être supérieur à 18ans
+--             - Nombre de but est par défaut 0
+-- 3- Noms des joueurs âgés de plus de 30 ans qui ont marqué un but pour le match dont l’idMatch=2
+-- 4- Créer une vue qui affiche le nombre des joueurs ayant marqué par match
+-- Partie II – Programmation
+-- 1. Créer une fonction qui renvoi la recette d’un match donnée en paramètre
+-- 2. Créer une fonction qui renvoi le nombre de billet vendus pour un match et un stade donné 
+-- 3- Créer une procédure qui affiche un spectacle donnée le nombre des billets vendus pour chaque catégorie
+-- 4- Créer une procédure qui affiche les joueurs jouant à la position « Attaquant » qui n’ont jamais marqué le but.
+-- 5- Créer une procédure qui affiche le total des recettes pour un stade
+-- 6- Créer une procédure qui affiche pour un stade donné en paramètre la liste des matchs joué ainsi  que le montant d’exploitation (sachant que le montant d’exploitation de stade est de 25% des  recette de match) Utiliser un curseur pour afficher le résultat comme suite : Idstade idMatch RecetteMatch Montant
+-- 7. Créer un déclencheur qui permet d’incrémenter le champ nombreBut à chaque que le joueur marque le but.
+-- 8. Créer un déclencheur qui empêche l’ajout d’un match au cas ou le nombre de billets vendus dépasse le nombre des places de stade.
+------------------------------------------------------------------------------------------------------------------------------
+-- 1- Créer la base de données « BotolaPro2022 » 
+create database BotolaPro2022
+-- 2- Créer les Tables avec un jeu d’enregistrement tenant compte des contraintes suivantes : 
+--             - L’âge de joueur doit être supérieur à 18ans
+--             - Nombre de but est par défaut 0
+-- Table "Stade"
+CREATE TABLE Stade (
+  idStade INT PRIMARY KEY,
+  ville VARCHAR(100),
+  nom VARCHAR(100),
+  nbPlaces INT,
+  prixBillet DECIMAL(10, 2)
+);
+
+-- Exemple d'enregistrements pour la table "Stade"
+INSERT INTO Stade (idStade, ville, nom, nbPlaces, prixBillet)
+VALUES
+  (1, 'Casablanca', 'Stade Mohammed V', 50000, 50.00),
+  (2, 'Rabat', 'Stade Adrar', 45000, 40.00);
+
+-- Table "Equipe"
+CREATE TABLE Equipe (
+  idEquipe INT PRIMARY KEY,
+  pays VARCHAR(100),
+  siteWeb VARCHAR(100),
+  entraîneur VARCHAR(100)
+);
+
+-- Exemple d'enregistrements pour la table "Equipe"
+INSERT INTO Equipe (idEquipe, pays, siteWeb, entraîneur)
+VALUES
+  (1, 'Maroc', 'http://www.equipe1.com', 'Entraîneur 1'),
+  (2, 'Algérie', 'http://www.equipe2.com', 'Entraîneur 2');
+
+-- Table "Joueur"
+CREATE TABLE Joueur (
+  idJoueur INT PRIMARY KEY,
+  idEquipe INT,
+  position VARCHAR(100),
+  nom VARCHAR(100),
+  prénom VARCHAR(100),
+  âge INT CHECK (âge > 18),
+  nombrebut INT DEFAULT 0,
+  FOREIGN KEY (idEquipe) REFERENCES Equipe (idEquipe)
+);
+
+-- Exemple d'enregistrements pour la table "Joueur"
+INSERT INTO Joueur (idJoueur, idEquipe, position, nom, prénom, âge)
+VALUES
+  (1, 1, 'Attaquant', 'Joueur 1', 'Prénom 1', 25),
+  (2, 1, 'Milieu', 'Joueur 2', 'Prénom 2', 32),
+  (3, 2, 'Défenseur', 'Joueur 3', 'Prénom 3', 20);
+
+-- Table "Match"
+CREATE TABLE Match (
+  idMatch INT PRIMARY KEY,
+  idStade INT,
+  dateMatch DATE,
+  idEquipe1 INT,
+  idEquipe2 INT,
+  scoreEquipe1 INT,
+  scoreEquipe2 INT,
+  nbBilletsVendus INT,
+  FOREIGN KEY (idStade) REFERENCES Stade (idStade),
+  FOREIGN KEY (idEquipe1) REFERENCES Equipe (idEquipe),
+  FOREIGN KEY (idEquipe2) REFERENCES Equipe (idEquipe)
+);
+
+-- Exemple d'enregistrements pour la table "Match"
+INSERT INTO Match (idMatch, idStade, dateMatch, idEquipe1, idEquipe2, scoreEquipe1, scoreEquipe2, nbBilletsVendus)
+VALUES
+  (1, 1, '2022-01-01', 1, 2, 2, 1, 5000),
+  (2, 2, '2022-02-01', 2, 1, 0, 0, 3000,
+
+  -- Table "But"
+CREATE TABLE But (
+  idJoueur INT,
+  idMatch INT,
+  minute INT,
+  penalty BOOLEAN,
+  FOREIGN KEY (idJoueur) REFERENCES Joueur (idJoueur),
+  FOREIGN KEY (idMatch) REFERENCES Match (idMatch)
+);
+
+-- Exemple d'enregistrements pour la table "But"
+INSERT INTO But (idJoueur, idMatch, minute, penalty)
+VALUES
+  (1, 1, 30, FALSE),
+  (2, 2, 60, TRUE);
+-- 3- Noms des joueurs âgés de plus de 30 ans qui ont marqué un but pour le match dont l’idMatch=2
+select j.noms, J.Prenom from joueur J 
+join but b on j.idJoueur=b.idJoueur 
+where J.age>30 and b.idMatch=2
+-- 4- Créer une vue qui affiche le nombre des joueurs ayant marqué par match
+CREATE VIEW Vue_NombreButsParMatch AS
+SELECT M.idMatch, COUNT(B.idJoueur) AS nombreButs
+FROM Match M
+LEFT JOIN But B ON M.idMatch = B.idMatch
+GROUP BY M.idMatch;
+-- Partie II – Programmation
+-- 1. Créer une fonction qui renvoi la recette d’un match donnée en paramètre
+CREATE FUNCTION  GetRecetteMatch(idMatch int)
+[RETURNS DECIMAL(10,2)]
+BEGIN
+DECLARE recette DECIMAL(10, 2);
+  
+  SELECT (scoreEquipe1 + scoreEquipe2) * prixBillet AS recette
+  INTO recette
+  FROM Match
+  JOIN Stade ON Match.idStade = Stade.idStade
+  WHERE Match.idMatch = idMatch;
+  
+  RETURN recette;
+END;
+-- 2. Créer une fonction qui renvoi le nombre de billet vendus pour un match et un stade donné 
+CREATE FUNCTION GetNombreBilletsVendus(idMatchId int,idStade int)
+[RETURNS int]
+BEGIN
+DECLARE nbBilletsVendus int;
+    select nbBilletsVendus into nbBilletsVendus from match where idMatchId = idMatch and match.idStade=idStade;
+    RETURN nbBilletsVendus;
+END;
+-- 3- Créer une procédure qui affiche un spectacle donnée le nombre des billets vendus pour chaque catégorie
+CREATE PROCEDURE afficheSpectacle(in id_match int)
+BEGIN
+  DECLARE nbBilletsCat1 INT;
+  DECLARE nbBilletsCat2 INT;
+  DECLARE nbBilletsCat3 INT;
+  
+  SELECT SUM(CASE WHEN prixBillet >= 100 THEN nbBilletsVendus ELSE 0 END) AS nbBilletsCat1,
+         SUM(CASE WHEN prixBillet >= 50 AND prixBillet < 100 THEN nbBilletsVendus ELSE 0 END) AS nbBilletsCat2,
+         SUM(CASE WHEN prixBillet < 50 THEN nbBilletsVendus ELSE 0 END) AS nbBilletsCat3
+  INTO nbBilletsCat1, nbBilletsCat2, nbBilletsCat3
+  FROM Match
+  JOIN Stade ON Match.idStade = Stade.idStade
+  WHERE Match.idMatch = idMatch;
+  
+  SELECT nbBilletsCat1 AS "Nombre de billets catégorie 1",
+         nbBilletsCat2 AS "Nombre de billets catégorie 2",
+         nbBilletsCat3 AS "Nombre de billets catégorie 3";
+END;
+-- 4- Créer une procédure qui affiche les joueurs jouant à la position 
+-- « Attaquant » qui n’ont jamais marqué le but.
+CREATE PROCEDURE AfficherJoueursSansBut()
+BEGIN
+    select j.nom,j.Prenom from Joueur J
+    join But B on j.idJoueur =B.idJoueur 
+     where J.position="Attaquant" and B.idJoueur is Null; 
+END;
+-- 5- Créer une procédure qui affiche le total des recettes pour un stade
+CREATE PROCEDURE AfficherTotalRecettesPourStade(in idstade int)
+BEGIN
+DECLARE  totalRecettes DECIMAL (10,2);
+    select sum((scoreEquipe1 + scoreEquipe2) * prixBillet) as totalRecettes)
+    into totalRecettes
+    from Match
+    where stade.idStade=idStade;
+    select totalRecettes as "Total des recettes pour le stade";
+END;
+-- 6- Créer une procédure qui affiche pour un stade donné en paramètre la liste des matchs joué ainsi  que le montant d’exploitation (sachant que le montant d’exploitation de stade est de 25% des  recette de match) Utiliser un curseur pour afficher le résultat comme suite : Idstade idMatch RecetteMatch Montant
+CREATE PROCEDURE AfficherMatchsEtMontantExploitation(IN idStade INT)
+BEGIN
+  DECLARE idMatch INT;
+  DECLARE recetteMatch DECIMAL(10, 2);
+  DECLARE montantExploitation DECIMAL(10, 2);
+  
+  DECLARE cur CURSOR FOR
+    SELECT Match.idMatch, (scoreEquipe1 + scoreEquipe2) * prixBillet AS recette
+    FROM Match
+    JOIN Stade ON Match.idStade = Stade.idStade
+    WHERE Stade.idStade = idStade;
+    
+  OPEN cur;
+  
+  FETCH cur INTO idMatch, recetteMatch;
+  
+  WHILE @@FETCH_STATUS = 0 DO
+    SET montantExploitation = recetteMatch * 0.25;
+    
+    SELECT idStade, idMatch, recetteMatch, montantExploitation AS "Montant d'exploitation"
+    FROM Stade
+    WHERE Stade.idStade = idStade;
+    
+    FETCH cur INTO idMatch, recetteMatch;
+  END WHILE;
+  
+  CLOSE cur;
+END;
+
+-- 7. Créer un déclencheur qui permet d’incrémenter le champ nombreBut à chaque que le joueur marque le but.
+create trigger IncrementerNombreBut
+after INSERT on But
+for EACH row
+BEGIN
+    UPDATE joueur
+    SET nombreBut = nombreBut + 1
+    WHERE idJoueur=new.idJoueur
+END;
+-- 8. Créer un déclencheur qui empêche l’ajout d’un match au cas ou le nombre de billets vendus dépasse le nombre des places de stade.
+create trigger VerifierNombreBilletsVendus
+BEFORE  INSERT on match
+for EACH row
+BEGIN
+    DECLARE  nbPlaces IN;
+    DECLARE  nbBilletsVendus IN;
+    select nbPlaces INTO nbPlaces from stade where idStade = new.stade
+  IF (nbBilletsVendus + 1) > nbPlaces THEN
+    SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'Le nombre de billets vendus dépasse le nombre de places du stade.';
+  END IF;
+END;
