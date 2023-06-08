@@ -947,3 +947,658 @@ BEGIN
     SET MESSAGE_TEXT = 'Le nombre de billets vendus dépasse le nombre de places du stade.';
   END IF;
 END;
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------    
+
+-- Le schéma de base de données suivant sera utilisé pour l’ensemble du sujet. Il permet de gérer 
+-- une plateforme de vente de billets de spectacles en ligne :
+-- ▪ Personne(idPersonne, nom, prénom, age)
+-- ▪ Salle(idSalle, nom, adresse, nbPlaces)
+-- ▪ Artiste(idArtiste, nom, prénom)
+-- ▪ Spectacle (idSpectacle, idArtiste, idSalle, dateSpectacle, nbBilletsVendus)
+-- ▪ Billet (idBillet, idPersonne, idSpectacle, catégorie, prix)
+-- Partie I – LDD
+-- 1- Créer la base de données « MegaRama » (0.25pts)
+-- 2- Créer les Tables avec un jeu d’enregistrement tenant compte des contraintes suivantes : (2.75pts) - L’âge de la personne doit être supérieur à 12ans - Catégorie de Billet doit être soit : Classe A, Classe b ou Classe C
+-- 3- Créer une requête qui compte le nombre de billet par catégorie d’un spectacle (1.5pt)
+-- 4- Créer une vue qui affiche le nombre de personne par Spectacle (1.5pt)
+-- Partie II – Programmation
+-- 1- Créer une fonction qui renvoi la recette d’un spectacle donnée en paramètre
+-- 2- Créer une fonction qui renvoi le nombre de billet vendus pour une catégorie et un spectacle donné
+-- 3- Créer une procédure qui affiche un spectacle donnée le nombre des billets vendus pour chaque catégorie
+-- 4- Créer une procédure qui affiche le total des recettes pour l’année encours
+-- 5- Créer une procédure qui affiche pour un artiste donné en paramètre liste des spectacles animés ainsi que le montant de participation (25% des recette de spectacle) Utiliser un curseur pour afficher le résultat comme suite : Id Spectacle Date Recette Spectacle Montant
+-- 6- Créer un déclencheur qui permet d’incrémenter le champ nbBilletsVendus à chaque vente de billet
+-- 7- Créer un déclencheur qui empêche les ventes de billets une fois le nombre de place de la salle est occupé.
+------------------------------------------------------------------------------------------------------------------------
+-- Partie I – LDD
+-- 1- Créer la base de données « MegaRama » (0.25pts)
+create database MegaRama
+use MegaRama
+-- 2- Créer les Tables avec un jeu d’enregistrement tenant compte des contraintes suivantes : (2.75pts) 
+-- - L’âge de la personne doit être supérieur à 12ans 
+-- - Catégorie de Billet doit être soit : Classe A, Classe b ou Classe C
+CREATE TABLE Personne (
+    idPersonne INT PRIMARY KEY,
+    nom VARCHAR(50),
+    prenom VARCHAR(50),
+    age INT CHECK(age > 12)
+);
+
+CREATE TABLE Salle (
+    idSalle INT PRIMARY KEY,
+    nom VARCHAR(50),
+    adresse VARCHAR(100),
+    nbPlaces INT
+);
+
+CREATE TABLE Artiste (
+    idArtiste INT PRIMARY KEY,
+    nom VARCHAR(50),
+    prenom VARCHAR(50)
+);
+
+CREATE TABLE Spectacle (
+    idSpectacle INT PRIMARY KEY,
+    idArtiste INT,
+    idSalle INT,
+    dateSpectacle DATE,
+    nbBilletsVendus INT,
+    FOREIGN KEY (idArtiste) REFERENCES Artiste(idArtiste),
+    FOREIGN KEY (idSalle) REFERENCES Salle(idSalle)
+);
+
+CREATE TABLE Billet (
+    idBillet INT PRIMARY KEY,
+    idPersonne INT,
+    idSpectacle INT,
+    categorie VARCHAR(10) CHECK(categorie IN ('Classe A', 'Classe B', 'Classe C')),
+    prix DECIMAL(8, 2),
+    FOREIGN KEY (idPersonne) REFERENCES Personne(idPersonne),
+    FOREIGN KEY (idSpectacle) REFERENCES Spectacle(idSpectacle)
+);
+-- 3- Créer une requête qui compte le nombre de billet par catégorie d’un spectacle (1.5pt)
+select categorie, count(*) as nombre de billet from billet where  idSpectacle=idSpectacle GROUP BY categorie
+-- 4- Créer une vue qui affiche le nombre de personne par Spectacle (1.5pt)
+CREATE VIEW Vue_PersonnesParSpectacle AS
+SELECT S.idSpectacle, COUNT(P.idPersonne) AS nombre_de_personnes
+FROM Spectacle S
+LEFT JOIN Billet B ON S.idSpectacle = B.idSpectacle
+LEFT JOIN Personne P ON B.idPersonne = P.idPersonne
+GROUP BY S.idSpectacle;
+-- Partie II – Programmation
+-- 1- Créer une fonction qui renvoi la recette d’un spectacle donnée en paramètre
+create function CalculerRecette(idSpectacle) RETURNS DECIMAL(8,2)
+BEGIN
+DECLARE recette decimal(8,2);
+select sum(prix) into recette from billet
+where idSpectacle=idSpectacle
+RETURN recette 
+END;
+-- 2- Créer une fonction qui renvoi le nombre de billet vendus pour une catégorie et un spectacle donné
+create function CalculerNombreBilletsVendus(idSpectacle int,categorie varchar(255)) RETURNS VARCHAR(255)
+BEGIN
+DECLARE nombreBilletsVendus INT;
+select coun(*) into nombreBilletsVendus from billet where  idSpectacle=idSpectacle and categorie=categorie 
+RETURN nombreBilletsVendus;
+END;
+-- 3- Créer une procédure qui affiche un spectacle donnée le nombre des billets vendus pour chaque catégorie
+CREATE PROCEDURE afficheSpectacle(idspectacle int)
+BEGIN
+    select s.nom as nom_spectacle,B.categorie,count(*) AS nombre_billets_vendus
+    from billet 
+    join billet b on s.idSpectacle=b.idSpectacle
+    where s.idSpectacle=b.idSpectacle
+    GROUP BY s.nom , b.categorie
+END;
+-- 4- Créer une procédure qui affiche le total des recettes pour l’année encours
+CREATE PROCEDURE  AfficherTotalRecettesAnneeEnCours()
+BEGIN
+    DECLARE annee int;
+    set annee=YEAR(CURDATE());
+    select sum(prix) as total_recettes
+    from billet 
+    join spectacle on billet.idSpectacle=spectacle.idSpectacle
+    where YEAR(Spectacle.dateSpectacle) = annee;
+END;
+-- 5- Créer une procédure qui affiche pour un artiste donné en paramètre liste des spectacles animés ainsi que le montant de participation (25% des recette de spectacle) Utiliser un curseur pour afficher le résultat comme suite : Id Spectacle Date Recette Spectacle Montant
+DELIMITER //
+
+CREATE PROCEDURE AfficherSpectaclesArtisteAvecMontant(idArtiste INT)
+BEGIN
+    DECLARE idSpectacle INT;
+    DECLARE dateSpectacle DATE;
+    DECLARE recetteSpectacle DECIMAL(8, 2);
+    DECLARE montantParticipation DECIMAL(8, 2);
+
+    DECLARE cur CURSOR FOR
+    SELECT S.idSpectacle, S.dateSpectacle, SUM(B.prix) AS recette
+    FROM Spectacle S
+    JOIN Billet B ON S.idSpectacle = B.idSpectacle
+    WHERE S.idArtiste = idArtiste
+    GROUP BY S.idSpectacle, S.dateSpectacle;
+
+    OPEN cur;
+    FETCH cur INTO idSpectacle, dateSpectacle, recetteSpectacle;
+
+    WHILE (FOUND_ROWS() > 0) DO
+        SET montantParticipation = recetteSpectacle * 0.25;
+        SELECT idSpectacle, dateSpectacle, recetteSpectacle, montantParticipation;
+        FETCH cur INTO idSpectacle, dateSpectacle, recetteSpectacle;
+    END WHILE;
+
+    CLOSE cur;
+END //
+
+DELIMITER ;
+
+-- 6- Créer un déclencheur qui permet d’incrémenter le champ nbBilletsVendus à chaque vente de billet
+create trigger IncrementerNbBilletsVendus 
+after insert on Billet 
+FOR EACH ROW
+BEGIN
+UPDATE  spectacle
+SET nbBilletsVendus =nbBilletsVendus +1
+WHERE idSpectacle=new.idSpectacle
+END;
+-- 7- Créer un déclencheur qui empêche les ventes de billets une fois le nombre de place de la salle est occupé.
+create trigger VerifierNombrePlacesAvantVente 
+BEFORE insert on Billet 
+FOR EACH ROW
+BEGIN
+    DECLARE nbPlacesOccupes INT;
+    select count(*) INTO nbPlacesOccupes
+    from Billet
+    where id.spectacle=new.idspectacle
+
+    DECLARE capacitySalle INT;
+    select nbPlaces into capacitySalle
+    from salle
+    join spectacle on spectacle.idsalle=Salle.idsalle
+
+    if nbPlacesOccupes >= capacitySalle THEN
+    signal SQLSTATE '45000' set MESSAGE_TEXT='La vente de billets est terminée. La salle est complète.';
+    END IF;
+
+END;
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------    
+-- Compte (NumCompte, solde, TypeCompte, #NumCl) 
+-- Client (CIN, nom, prenom, adresse, tel)
+-- Operation ( NumOP, TypeOp, MontantOp, #NumCpt, DateOp) 
+-- Versement (NunVer, dateVer, NumCompteDebiteur, NumCompteCrediteur, montant)
+-- Exercice 1 : Les procédures stockées
+-- 1- Créer une procédure qui affiche la liste des opérations effectué par un client l’année 
+-- encours
+-- 2- Créer une fonction qui renvoie la somme des opérations par compte pour un client donnée 
+-- en paramètre
+-- Exercice 2 : Les triggers
+-- 1- Créer un trigger TR_MAJ_Solde qui permet de mettre à jour le solde lors d’une opération
+-- 2- Créer un trigger TR_MAJ_SOLDE_Ver qui permet de mettre à jour le solde des comptes lors 
+-- de l’opération de versement.
+-- 3- Créer un déclencheur TR_AJOUT_COMPTE qui, à la création d'un nouveau compte de type
+-- CC, vérifie si le solde est >1500.00DH.
+-- 4- Créer un déclencheur qui empêche la création d'un nouveau compte de type CC pour un
+-- client qui en a déjà un.
+-- 5- Créer un déclencheur qui empêche la suppression d’un compte dont le solde n’est pas 0
+-- 6- Créer un déclencheur TR_UPDATE_COMPTE qui interdit la modification du type de compte
+-- des comptes auxquels sont associées des opérations,
+------------------------------------------------------------------------------------------------------------------------------------
+-- Exercice 1 : Les procédures stockées
+-- 1- Créer une procédure qui affiche la liste des opérations effectué par un client l’année encours
+create procedure ListeOperationsParClientAnneeEnCours(in NumCl)
+BEGIN
+DECLARE anneeEnCour int;
+set anneeEnCour = YEAR(GETDATE())
+
+select o.numOP,o.typeOp,o.montantop,o.dateOp
+from Operation o 
+join compte c on o.NumCpt = c.NumCompte
+where c.numC1=numC1 and YEAR(o.dateOp) = anneeEnCours;
+END;
+-- 2- Créer une fonction qui renvoie la somme des opérations par compte pour un client donnée en paramètre
+create function SommeOperationsParComptePourClient(NumC1 int) RETURNS table
+BEGIN
+RETURN(
+    select c.NumCompte , sum(o.montant) as SommeOperationsParComptePourClient
+    from compte c
+    join Operation o on c.NumCompte = o.NumCompte
+    where c.numC1 =NumC1
+    GROUP BY
+        c.NumCompte
+)
+END;
+-- Exercice 2 : Les triggers
+-- 1- Créer un trigger TR_MAJ_Solde qui permet de mettre à jour le solde lors d’une opération
+create trigger TR_MAJ_Solde after insert on Operation
+FOR EACH ROW
+BEGIN
+if new.TypeOp='Debit' then
+UPDATE compte SET solde = solde - new.montantOp where NumCompte =new.NumCompte;
+ELSE
+UPDATE compte SET solde = solde + new.montantOp where NumCompte =new.NumCompte;
+endIf;
+WHERE condition
+END;
+-- 2- Créer un trigger TR_MAJ_SOLDE_Ver qui permet de mettre à jour le solde des comptes lors de l’opération de versement.
+create trigger TR_MAJ_SOLDE_Ver after insert on versement
+for each row
+BEGIN
+UPDATE complets SET solde=solde-new.montant where NumCompte=new.NumCompteDebiteur
+UPDATE complets SET solde=solde+new.montant where NumCompte=new.NumCompteCrediteur
+END;
+-- 3- Créer un déclencheur TR_AJOUT_COMPTE qui, à la création d'un nouveau compte de type CC, vérifie si le solde est >1500.00DH.
+create trigger TR_AJOUT_COMPTE BEFORE insert on Compte
+for each row
+BEGIN
+if new.TypeCompte='cc' and new.solde <=1500.00 THEN
+signal SQLSTATE '45000' set MESSAGE_TEXT="Le solde initial d'un compte CC doit être supérieur à 1500.00DH";
+    END IF;
+END;
+-- 4- Créer un déclencheur qui empêche la création d'un nouveau compte de type CC pour un client qui en a déjà un.
+create trigger TR_EMPECHE_CREATION_CC BEFORE INSERT on Compte
+for each row
+BEGIN
+if new.TypeCompte='cc' and existe(select 1 from Compte where numC1=new.NumC1 and TypeCompte='cc') THEN
+signal SQLSTATE '45000' set MESSAGE_TEXT="Un client ne peut avoir qu'un seul compte courant (CC)";
+endIf
+END;
+-- 5- Créer un déclencheur qui empêche la suppression d’un compte dont le solde n’est pas 0
+create trigger TR_EMPECHE_SUPPRESSION_COMPTE BEFORE DELETE ON compte
+for each row
+BEGIN
+IF old.solde <> 0 THEN
+signal SQLSTATE '45000' set MESSAGE_TEXT='Impossible de supprimer un compte dont le solde n\'est pas 0';
+    END IF;
+END;
+-- 6- Créer un déclencheur TR_UPDATE_COMPTE qui interdit la modification du type de compte des comptes auxquels sont associées des opérations,
+create TR_UPDATE_COMPTE BEFORE UPDATE on complets
+FOR EACH ROW
+BEGIN
+ IF EXISTS (SELECT 1 FROM Operation WHERE NumCpt = OLD.NumCompte) THEN
+        IF OLD.TypeCompte <> NEW.TypeCompte THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Impossible de modifier le type de compte associé à des opérations';
+        END IF;
+    END IF;
+END;
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------    
+-- Partie 01 : Gestion de collection (1.75pt)
+-- 1- Créer la base de données « DBLP » (0.25pt)
+use DBLP
+-- 2- Créer la collection « publis » (0.25pt)
+db.creatCollection("publis")
+-- 3- Créer une variable « pub » contenant le document suivant : (0.25pt)
+-- {
+--  "type": "Book",
+--  "title": "Modern Database Systems: The Object Model, Interoperability, and 
+-- Beyond.",
+--  "year": 1995,
+--  "publisher": "ACM Press and Addison-Wesley",
+--  "authors": ["Won Kim"],
+--  "source": "DBLP"
+-- }
+var pub={
+ "type": "Book",
+ "title": "Modern Database Systems: The Object Model, Interoperability, and 
+Beyond.",
+ "year": 1995,
+ "publisher": "ACM Press and Addison-Wesley",
+ "authors": ["Won Kim"],
+ "source": "DBLP"
+}
+
+-- 4- Insérer le document ci-dessus. (0.25pt)
+db.publis.insertOne(pub)
+-- 5- Importer les documents dans la collection « publis » à partir de fichier json « dblp.json » (0.25pt)
+mongoimport -d DBLP
+-c publis
+dblp.json
+-- 6- Renommer la collection « publis » par « publications ». (0.25pts)
+db.publis.renameCollection('publications')
+-- 7- Créer un index sur les champs : title (en ordre croissant), year (en ordre décroissant) et type. (0.25pt)
+db.publications.createIndex({title:1, year:-1, type:1})
+---------------------------------------------------------------
+-- 1. Liste de tous les livres (type « Book ») ; (0.25pt)
+db.publications.find({type:"book"})
+-- 2. Liste des publications depuis 2011 ; (0.25pt)
+db.publications.find({year:{$glt:2011}})
+-- 3. Liste des livres depuis 2014 ; (0.25pt)
+db.publications.find({type:"book",year:{$glt:2014}})
+-- 4. Liste des publications de l’auteur « Toru Ishida » ; (0.25pt)
+db.publications.find({authors:"Toru Ishida"})
+-- 5. Liste de tous les éditeurs (type « publisher »), distincts ; (0.5pt)
+db.publications.distincts("publisher",{type:"publisher"});
+-- 6. Liste de tous les auteurs distincts ; (0.5pt)
+db.publications.distincts("authors");
+-- 7. Trier les publications de « Toru Ishida » par titre de livre et par page de début ; (0.5pt)
+db.publications.find({auteurs:"Toru Ishida"},sort({title:1,startPage:1}))
+-- 8. Projeter le résultat sur le titre de la publication, et les pages ; (0.5pt)
+db.publications.find({auteurs:"Toru Ishida"},{title:1,startPage:1})
+-- 9. Compter le nombre de ses publications ; (1pt)
+db.publications.find().count()
+-- 10. Compter le nombre de publications depuis 2011 et par type ; (1pt)
+db.publications.aggregate([
+  { $match: { year: { $gte: 2011 } } },
+  { $group: { _id: "$type", count: { $sum: 1 } } }
+]);
+-- 11. Compter le nombre de publications par auteur et trier le résultat par ordre croissant. (1pt)
+db.publications.aggregate([
+  { $unwind: "$authors" },
+  { $group: { _id: "$authors", count: { $sum: 1 } } },
+  { $sort: { count: 1 } }
+])
+---------------------------------------------------------------
+-- 1. Mettre à jour tous les livres contenant « database » en ajoutant l’attribut « Genre » : « Database ». (0.25pt)
+db.publications.updateMany([
+    {type:'book', title: { $regex: "database", $options: "i" } },{ $set: { Genre: "Database" } }
+])
+-- 2. Supprimer le champ « number » de tous articles. (1pt)
+db.publications.updateMany(
+  { type: "article" },
+  { $unset: { number: "" } }
+)
+-- 3. Supprimer tous les articles n’ayant aucun auteur. (1pt)
+db.publications.deleteMany(
+  { type: "article", authors: { $exists: false } }
+)
+-- 4. Modifier toutes les publications ayant des pages pour ajouter le champ « pp » avec pour valeur le motif suivant : pages.start--pages.end. (1pt)
+db.publications.updateMany(
+  { pages: { $exists: true } },
+  { $set: { pp: { $concat: [ "$pages.start", "--", "$pages.end" ] } } }
+)
+---------------------------------------------------------------
+-- 1- Créer les utilisateurs suivants : (1.25pt)
+use admin
+
+db.createUser({
+  user: "Alami",
+  pwd: "@lam!",
+  roles: [
+    { role: "readWrite", db: "userDatabase" },
+    { role: "dbOwner", db: "userDatabase" }
+  ]
+})
+
+db.createUser({
+  user: "Rami",
+  pwd: "r@m!",
+  roles: [
+    { role: "read", db: "userDatabase" },
+    { role: "dbAdmin", db: "userDatabase" }
+  ]
+})
+
+db.createUser({
+  user: "Kabiri",
+  pwd: "k@bir!",
+  roles: [
+    { role: "readWrite", db: "userDatabase" }
+  ]
+})
+
+-- 2- Ecrire le Script MongoDB qui permet de changer le mot de passe de l’utilisateur Alami. (0.5pt)
+db.changeUserPassword("Alami", "@lam!NewPassword")
+-- 3- Ecrire le Script MongoDB qui permet d’authentifier au serveur entant que l’utilisateur Rami. (0.25pt)
+db.auth("Rami", "r@m!")
+-- 4- Ecrire le Script MongoDB qui permet de supprimer l’utilisateur Kabiri. (0.25pt
+db.dropUser("Kabiri")
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------    
+-- 1- Créer la base de données « ScholarVox » dans mongoDB (1pt)
+-- 2- Créer la collection « books » en respectant le format ci-dessus. (1pt)
+-- 3- Ecrire la requête qui permet d’insérer un document. (2pts)
+-- 4- Ecrire la requête qui permet d’afficher les informations de livre dont le numéro ISBN 
+-- est : 2154889589 (2pts)
+-- 5- Ecrire une requête qui compte le nombre des ventes pour chaque livre. (2pts)
+-- 6- Ecrire une requête qui calcul le montant total des ventes de l’année encours. (2pts)
+-- 7- Ecrire une requête qui calcul la somme des ventes de livre numéro ; 2154889589 (2pts)
+-- 8- Ecrire une requête qui permet de mettre à jour le champ recette de chaque Auteur.
+-- (2pts)
+-- 9- Ecrire une requête qui affiche les livres jamais vendus. (2pts)
+----------------------------------------------------------------------------------------------------------------
+{ 
+"id" :9, 
+"nom" :"ALAMI",
+"prénom":"Ahmed", 
+"recette":0,
+"livre" : 
+[ 
+{ "isbn" :2154889589 ,
+"titre" :"NoSQL", 
+"prixachat":250,
+"vente": 
+[ 
+{ "id_vente":12, 
+"date" :02/06/2017,
+"prixvente":300
+},
+{ 
+"id_vente":20, 
+"date" :12/09/2017,
+"prixvente":350
+} 
+] 
+} 
+] 
+}
+-- 1- Créer la base de données « ScholarVox » dans mongoDB (1pt)
+use ScholarVox
+-- 2- Créer la collection « books » en respectant le format ci-dessus. (1pt)
+db.createCollection("books")
+-- 3- Ecrire la requête qui permet d’insérer un document. (2pts)
+db.books.insertOne({
+  "isbn": 2154889589,
+  "titre": "NoSQL",
+  "prixachat": 250,
+  "vente": [
+    {
+      "id_vente": 12,
+      "date": "02/06/2017",
+      "prixvente": 300
+    },
+    {
+      "id_vente": 20,
+      "date": "12/09/2017",
+      "prixvente": 350
+    }
+  ]
+})
+
+-- 4- Ecrire la requête qui permet d’afficher les informations de livre dont le numéro ISBN est : 2154889589 (2pts)
+db.books.find("isbn":2154889589)
+-- 5- Ecrire une requête qui compte le nombre des ventes pour chaque livre. (2pts)
+db.books.aggregate([
+  {
+    $project: {
+      _id: 0,
+      isbn: 1,
+      numberOfSales: { $size: "$vente" }
+    }
+  }
+])
+-- 6- Ecrire une requête qui calcul le montant total des ventes de l’année encours. (2pts)
+db.books.aggregate([
+  {
+    $project: {
+      _id: 0,
+      isbn: 1,
+      totalSalesAmount: {
+        $reduce: {
+          input: "$vente",
+          initialValue: 0,
+          in: { $sum: ["$$value", "$$this.prixvente"] }
+        }
+      }
+    }
+  }
+])
+
+-- 7- Ecrire une requête qui calcul la somme des ventes de livre numéro ; 2154889589 (2pts)
+db.books.aggregate([
+  {
+    $match: {
+      "isbn": 2154889589
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      isbn: 1,
+      totalSalesAmount: {
+        $sum: "$vente.prixvente"
+      }
+    }
+  }
+])
+
+-- 8- Ecrire une requête qui permet de mettre à jour le champ recette de chaque Auteur.(2pts)
+db.books.updateMany({},{$set{"recette":100}})
+-- 9- Ecrire une requête qui affiche les livres jamais vendus. (2pts
+db.books.find({"vente": { $size: 0 }})
+DELIMITER //
+CREATE PROCEDURE AfficherLivresParEditeur(IN editeurId INT)
+BEGIN
+    SELECT *
+    FROM Livre
+    WHERE editeurId = editeurId;
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE AfficherLivresNonVendus()
+BEGIN
+    SELECT *
+    FROM Livre
+    WHERE id NOT IN (SELECT DISTINCT livreId FROM Vente);
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE FUNCTION CalculerChiffreAffaires(produitId INT)
+RETURNS DECIMAL(10, 2)
+BEGIN
+    DECLARE total DECIMAL(10, 2);
+    SELECT SUM(prixVente) INTO total
+    FROM Vente
+    WHERE livreId = produitId
+        AND YEAR(dateVente) = YEAR(CURRENT_DATE);
+    RETURN total;
+END //
+DELIMITER ;
+
+create trigger MiseAJourRecette after insert on vente
+for EACH ROW
+BEGIN
+UPDATE auteur
+SET recette = recette + NEW.prixVente
+    WHERE id = (SELECT auteurId FROM Livre WHERE id = NEW.livreId);
+END;
+
+-------control 202 ftir-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------    ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------    
+-- Soit la base de données FACTURATION qui contient les tables suivantes :
+-- CAISSE (NumCaisse, Heuredeb, Heurefin, Caissière, SomInitiale, SomFinale)
+-- FACTURE (NumFac, NumCaisse*, DateFac, TypePaie)
+-- LIGNEFAC (NumFac*, Article, Prix Unitaire, Qté)
+-- 1) Lister via une procédure stockée les caisses dans les quelles le type du paiement est " espèce" (3 Pts)
+CREATE PROCEDURE ListeCaissesEspece()
+BEGIN
+    select * from caisse where NumCaisse in (select TypePaie from factures where TypePaie="espèce")
+END;
+-- 2) Ecrire une fonction qui retourne le total de monnaie enregistrée sur une caisse donnée au cours d'une date donnée. (3 Pts)
+CREATE FUNCTION TotalMonnaieCaisse(NumCaisseParam INT, DateParam DATE) RETURNS DECIMAL(10,2)
+BEGIN
+DECLARE totale DECIMAL(10,2);
+select sum(SomInitiale) into totale 
+from caisse where NumCaisse=NumCaisseParam  AND DATE(Heuredeb) = DateParam;
+    RETURN Total;
+END;
+-- 3) Ecrire une procédure stockée qui liste les caissières qui ont passé des articles dont le prix unitaire est supérieur à 300. (3 Pts)
+
+CREATE PROCEDURE ListeCaissièresPrixSupérieur300()
+BEGIN
+    SELECT DISTINCT Caissière
+    FROM LIGNEFAC
+    WHERE PrixUnitaire > 300;
+END
+-- 4) Supprimer à travers une procédure stockée les caisses qui n'ont reçu aucun règlement de factures. (3 Pts)
+CREATE PROCEDURE supprimecaissesaucunréglement()
+BEGIN
+    delete from CAISSE where NumCaisse not in (
+        select NumCaisse from FACTURE
+    );
+END
+
+-- 5) Créer une fonction qui calcule et renvoie la somme et la moyenne des règlements effectués par chèque dans une période donnée pour une caissière donnée. (3 Pts)
+CREATE FUNCTION SommeMoyenneReglements(NumCaisseParam INT, DateDebutParam DATE, DateFinParam DATE)
+RETURNS TABLE (Somme DECIMAL(10,2), Moyenne DECIMAL(10,2))
+BEGIN
+    DECLARE Total DECIMAL(10,2);
+    DECLARE Count INT;
+    SELECT SUM(SomInitiale), COUNT(*) INTO Total, Count
+    FROM CAISSE
+    WHERE NumCaisse = NumCaisseParam
+        AND TypePaie = 'cheque'
+        AND DATE(DateFac) BETWEEN DateDebutParam AND DateFinParam;
+    
+    RETURN TABLE (Total, Total / Count);
+END
+-- 6) Lister via une fonction les numéros de caisse auxquelles une caissière donnée est affectée une seule fois. Appeler la fonction. (3 Pts)
+CREATE FUNCTION ListeCaissesUnique(CaissièreParam VARCHAR(100))
+RETURNS TABLE (NumCaisse INT)
+BEGIN
+    DECLARE Count INT;
+    SELECT COUNT(*) INTO Count
+    FROM CAISSE
+    WHERE Caissière = CaissièreParam;
+    
+    IF Count = 1 THEN
+        INSERT INTO ListeCaissesUnique
+        SELECT NumCaisse
+        FROM CAISSE
+        WHERE Caissière = CaissièreParam;
+    END IF;
+    
+    RETURN;
+END
+
+-- 7) Programmer les triggers qui conviennent pour respecter les règles de gestion suivantes :
+-- La somme SomInitiale doit être inférieure ou égale à la somme SomFinale (2 Pts)
+create trigger VerifSommeInitFin 
+befor insert on caisse 
+for EACH ROW
+BEGIN
+IF NEW.SomInitiale > NEW.SomFinale THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La somme initiale doit être inférieure ou égale à la somme finale.';
+    END IF;
+END;
+-- Dans la table FACTURE le type de paiement doit être parmi l'une des valeurs suivantes : 'espèce', 'CB', 'cheque' et 'bon achat. (2 Pts)
+create trigger VerifTypePaiement BEFORE insert on FACTURE
+for EACH ROW
+BEGIN
+IF NEW.TypePaie NOT IN ('espèce', 'CB', 'cheque', 'bon achat') THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Le type de paiement doit être parmi les valeurs : espèce, CB, cheque, bon achat.';
+    END IF;
+END;
+
+-- 8) Eviter la diminution des valeurs du champ Prix Unit par un trigger en modification sur la table LIGNEFAC. (2 Pts)
+create trigger BloquerDiminutionPrixUnit
+BEFORE UPDATE on LIGNEFAC 
+for EACH row
+BEGIN
+IF NEW.PrixUnitaire < OLD.PrixUnitaire THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La diminution des valeurs du champ PrixUnit est interdite.';
+    END IF;
+END;
+Partic 2 (NoSQL/MongoDB) (16 points)
+
+-- Ci-dessous un échantillon de données déjà importées dans une collection appelée Books:
+ [ {"_id": "Book001","type": "Roman", "titre": "Sans Famille", "pages": 417, "date": 2000, "auteurs": ["Hector Malot"]}.
+{"_id": "Book002","type": "Digital", "titre": "Querying MySQL", "pages": 672, "date": 2022, "auteurs": ["Adam Aspin"]}
+-- Réaliser les requêtes MongoDB permettant de :
+-- 1) Afficher les ouvrages dont le titre est 'Sans Famille' (4 Pts)
+db.Books.find({ "titre": "Sans Famille" })
+
+-- 2) Afficher uniquement le titre et les auteurs des ouvrages dont le nombre de pages est inférieur ou égal à 450 (4 Pts)
+db.Books.find({ "pages": { "$lte": 450 } }, { "titre": 1, "auteurs": 1 })
+-- 3) Afficher uniquement le titre et les auteurs des ouvrages de type 'Roman' triés par nombre de pages (ordre croissant) (4 Pts)
+db.Books.find({ "type": "Roman" }, { "titre": 1, "auteurs": 1 }.sort({ "pages": 1 }))
+-- 4) Afficher les ouvrages n'ayant pas le nombre de pages (4 Pts)
+db.Books.find({ "pages": { "$exists": false } })
